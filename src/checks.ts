@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { SmsFlorinClient } from "sms-florin";
 import { db } from "./db.js";
+import { getMonitor } from "./monitors.js";
 import type { CheckResponse, CheckRow, Channel } from "./types.js";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
@@ -30,6 +31,7 @@ function toRow(id: string): CheckRow | undefined {
 function toResponse(row: CheckRow): CheckResponse {
   return {
     id: row.id,
+    monitorId: row.monitor_id,
     channel: row.channel,
     status: row.status,
     target: row.target,
@@ -78,6 +80,25 @@ export async function startCheck(
   return toResponse(toRow(id)!);
 }
 
+export function startMonitorCheck(
+  apiKey: string,
+  monitorId: string,
+  timeoutSeconds?: number,
+): CheckResponse {
+  const monitor = getMonitor(apiKey, monitorId);
+  if (!monitor) throw new Error("monitor not found");
+
+  const timeout = clampTimeout(timeoutSeconds);
+  const id = nanoid(16);
+
+  db.prepare(
+    `INSERT INTO checks (id, api_key, monitor_id, channel, target, upstream_ref, timeout_seconds)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(id, apiKey, monitor.id, monitor.channel, monitor.target, monitor.upstream_ref, timeout);
+
+  return toResponse(toRow(id)!);
+}
+
 async function resolveIfPossible(row: CheckRow): Promise<CheckRow> {
   if (row.status !== "pending") return row;
 
@@ -90,7 +111,18 @@ async function resolveIfPossible(row: CheckRow): Promise<CheckRow> {
   if (row.channel === "sms") {
     if (!smsClient) throw new Error("SMS checks are not configured on this server.");
     const rental = await smsClient.getRental(Number(row.upstream_ref));
-    if (rental.messages.length > 0) {
+    if (row.monitor_id) {
+      // A monitor's number is reused across many checks, so its message
+      // list accumulates history — only a message that arrived after THIS
+      // check started counts as this check's result.
+      const relevant = rental.messages
+        .map((m) => new Date(m.receivedAt).getTime())
+        .filter((t) => t >= startedAtMs)
+        .sort((a, b) => a - b);
+      if (relevant.length > 0) receivedAtMs = relevant[0];
+    } else if (rental.messages.length > 0) {
+      // Ad-hoc (non-monitor) checks use a fresh "instant" rental that closes
+      // on its first-ever message, so there's nothing to filter.
       receivedAtMs = new Date(rental.messages[0].receivedAt).getTime();
     }
   } else {

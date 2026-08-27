@@ -4,6 +4,7 @@ export type CheckStatus = "pending" | "received" | "timed_out";
 export interface CheckRow {
   id: string;
   api_key: string;
+  monitor_id: string | null;
   channel: Channel;
   target: string | null;
   upstream_ref: string;
@@ -15,8 +16,27 @@ export interface CheckRow {
   latency_ms: number | null;
 }
 
+export interface MonitorRow {
+  id: string;
+  api_key: string;
+  channel: Channel;
+  target: string;
+  upstream_ref: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface MonitorResponse {
+  id: string;
+  channel: Channel;
+  target: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface CheckResponse {
   id: string;
+  monitorId: string | null;
   channel: Channel;
   status: CheckStatus;
   target: string | null;

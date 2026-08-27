@@ -14,9 +14,29 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- A monitor holds ONE persistently-rented number (monthly period, ~7 EUR
+  -- flat regardless of message volume) that many checks reuse. This exists
+  -- because a fresh "instant" rental per check (the old design) costs
+  -- ~0.80 EUR each — fine for an occasional manual check, ruinous for
+  -- automated monitoring every 15-30 minutes (would be 1000+ EUR/month for
+  -- a single monitored flow). Email has no equivalent cost problem
+  -- (receivemail.dev mailbox creation is free/self-serve), so monitors
+  -- currently only exist for the sms channel.
+  CREATE TABLE IF NOT EXISTS monitors (
+    id TEXT PRIMARY KEY,
+    api_key TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    target TEXT NOT NULL,
+    upstream_ref TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_monitors_api_key ON monitors(api_key, created_at);
+
   CREATE TABLE IF NOT EXISTS checks (
     id TEXT PRIMARY KEY,
     api_key TEXT NOT NULL,
+    monitor_id TEXT,
     channel TEXT NOT NULL,
     target TEXT,
     upstream_ref TEXT NOT NULL,
@@ -39,6 +59,19 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_request_log_api_key ON request_log(api_key, created_at);
 `);
+
+// The 'checks' table predates 'monitor_id' — CREATE TABLE IF NOT EXISTS
+// doesn't retrofit columns onto an already-existing table, so a running
+// deployment needs this one-time ALTER. Safe to run on every boot: it
+// no-ops (caught, ignored) once the column is already there.
+try {
+  db.exec("ALTER TABLE checks ADD COLUMN monitor_id TEXT");
+} catch {
+  // already migrated
+}
+
+// Only safe to create after the ALTER above guarantees the column exists.
+db.exec("CREATE INDEX IF NOT EXISTS idx_checks_monitor_id ON checks(monitor_id, started_at)");
 
 export function logRequest(apiKey: string | null, method: string, path: string, status: number) {
   db.prepare(

@@ -1,8 +1,9 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { issueApiKey, isValidApiKey } from "./auth.js";
-import { getCheck, listChecks, startCheck } from "./checks.js";
+import { getCheck, listChecks, startCheck, startMonitorCheck } from "./checks.js";
 import { logRequest } from "./db.js";
+import { createMonitor, listMonitors } from "./monitors.js";
 import type { Channel } from "./types.js";
 
 type Variables = { apiKey: string };
@@ -65,6 +66,49 @@ checks.get("/:id", async (c) => {
 });
 
 app.route("/checks", checks);
+
+const monitors = new Hono<{ Variables: Variables }>();
+
+monitors.use("*", async (c, next) => {
+  const auth = c.req.header("authorization") ?? "";
+  const key = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  if (!key || !isValidApiKey(key)) {
+    return c.json({ error: "missing or invalid API key" }, 401);
+  }
+  c.set("apiKey", key);
+  await next();
+});
+
+monitors.post("/", async (c) => {
+  const apiKey = c.get("apiKey") as string;
+  try {
+    const monitor = await createMonitor(apiKey);
+    return c.json(monitor, 201);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error) }, 502);
+  }
+});
+
+monitors.get("/", (c) => {
+  const apiKey = c.get("apiKey") as string;
+  return c.json(listMonitors(apiKey));
+});
+
+monitors.post("/:id/checks", async (c) => {
+  const apiKey = c.get("apiKey") as string;
+  const body = await c.req
+    .json<{ timeoutSeconds?: number }>()
+    .catch(() => ({}) as { timeoutSeconds?: number });
+  try {
+    const check = startMonitorCheck(apiKey, c.req.param("id"), body.timeoutSeconds);
+    return c.json(check, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: message }, message === "monitor not found" ? 404 : 502);
+  }
+});
+
+app.route("/monitors", monitors);
 
 app.get("/logs", (c) => {
   const auth = c.req.header("authorization") ?? "";
