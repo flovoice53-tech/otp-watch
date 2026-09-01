@@ -158,6 +158,11 @@ curl -X POST https://otpwatch.flo-voice1.com/monitors/MON_ID/checks \\
     <p>An uptime monitor confirms your API answered. otp-watch confirms a human on the other end would have received the code. Those are not the same check, and only the second one tells you your login flow still works.</p>
   </section>
 
+  <section>
+    <h2>Guides</h2>
+    <p style="color:var(--text-dim)"><a href="/guides/monitoring-otp-delivery">How to monitor whether your OTP codes actually get delivered</a></p>
+  </section>
+
   <footer>
     otp-watch is built on <a href="https://flo-voice1.com">sms-florin</a> (rent a real phone number for SMS/OTP codes) and <a href="https://receivemail.dev">receivemail.dev</a> (disposable inboxes via API). Source and full docs: <a href="https://github.com/flovoice53-tech/otp-watch">github.com/flovoice53-tech/otp-watch</a>.
   </footer>

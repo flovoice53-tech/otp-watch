@@ -6,6 +6,7 @@ import { getCheck, listChecks, startCheck, startMonitorCheck } from "./checks.js
 import { logRequest } from "./db.js";
 import { listMonitors, reRentExpiringMonitors } from "./monitors.js";
 import { LANDING_HTML } from "./landing.js";
+import { GUIDES, GUIDE_SLUGS } from "./guides.js";
 import type { Channel } from "./types.js";
 
 type Variables = { apiKey: string };
@@ -35,13 +36,25 @@ app.get("/robots.txt", (c) =>
   ),
 );
 
-app.get("/sitemap.xml", (c) =>
-  c.text(
-    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>https://otpwatch.flo-voice1.com/</loc></url>\n</urlset>\n`,
+app.get("/sitemap.xml", (c) => {
+  const locs = [
+    "https://otpwatch.flo-voice1.com/",
+    ...GUIDE_SLUGS.map((s) => `https://otpwatch.flo-voice1.com/guides/${s}`),
+  ];
+  return c.text(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+      locs.map((l) => `<url><loc>${l}</loc></url>`).join("\n") +
+      `\n</urlset>\n`,
     200,
     { "content-type": "application/xml" },
-  ),
-);
+  );
+});
+
+app.get("/guides/:slug", (c) => {
+  const html = GUIDES[c.req.param("slug")];
+  if (!html) return c.json({ error: "not found" }, 404);
+  return c.html(html);
+});
 
 app.post("/keys", async (c) => {
   const body = await c.req
