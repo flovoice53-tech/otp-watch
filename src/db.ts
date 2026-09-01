@@ -73,6 +73,31 @@ try {
 // Only safe to create after the ALTER above guarantees the column exists.
 db.exec("CREATE INDEX IF NOT EXISTS idx_checks_monitor_id ON checks(monitor_id, started_at)");
 
+// Billing columns added after monitors were already free/unpaid in v1 — same
+// "ALTER on an existing table, no-op if already migrated" pattern as
+// monitor_id above. A monitor only becomes usable once the webhook marks it
+// 'active' after a real Stripe payment; stripe_session_id is unique so a
+// redelivered checkout.session.completed webhook can't create two monitors
+// for the same payment.
+for (const stmt of [
+  "ALTER TABLE monitors ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+  "ALTER TABLE monitors ADD COLUMN stripe_customer_id TEXT",
+  "ALTER TABLE monitors ADD COLUMN stripe_subscription_id TEXT",
+  "ALTER TABLE monitors ADD COLUMN stripe_session_id TEXT",
+]) {
+  try {
+    db.exec(stmt);
+  } catch {
+    // already migrated
+  }
+}
+db.exec(
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_monitors_stripe_session_id ON monitors(stripe_session_id)",
+);
+db.exec(
+  "CREATE INDEX IF NOT EXISTS idx_monitors_stripe_subscription_id ON monitors(stripe_subscription_id)",
+);
+
 export function logRequest(apiKey: string | null, method: string, path: string, status: number) {
   db.prepare(
     "INSERT INTO request_log (api_key, method, path, status) VALUES (?, ?, ?, ?)",

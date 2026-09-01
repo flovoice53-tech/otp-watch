@@ -16,6 +16,8 @@ export interface CheckRow {
   latency_ms: number | null;
 }
 
+export type MonitorStatus = "active" | "past_due" | "canceled";
+
 export interface MonitorRow {
   id: string;
   api_key: string;
@@ -24,6 +26,10 @@ export interface MonitorRow {
   upstream_ref: string;
   created_at: string;
   expires_at: string;
+  status: MonitorStatus;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_session_id: string | null;
 }
 
 export interface MonitorResponse {
@@ -32,6 +38,7 @@ export interface MonitorResponse {
   target: string;
   createdAt: string;
   expiresAt: string;
+  status: MonitorStatus;
 }
 
 export interface CheckResponse {

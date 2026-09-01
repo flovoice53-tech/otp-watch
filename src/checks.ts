@@ -87,6 +87,9 @@ export function startMonitorCheck(
 ): CheckResponse {
   const monitor = getMonitor(apiKey, monitorId);
   if (!monitor) throw new Error("monitor not found");
+  if (monitor.status !== "active") {
+    throw new Error(`monitor subscription is ${monitor.status} — checks are paused`);
+  }
 
   const timeout = clampTimeout(timeoutSeconds);
   const id = nanoid(16);
